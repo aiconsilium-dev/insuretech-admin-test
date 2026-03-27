@@ -1,1 +1,68 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
+
+@theme {
+  --color-primary: #4F46E5;
+  --color-primary-light: #EEF2FF;
+  --color-primary-hover: #6366F1;
+
+  --color-green: #059669;
+  --color-green-light: #ECFDF5;
+  --color-green-hover: #047857;
+
+  --color-red: #DC2626;
+  --color-red-light: #FEF2F2;
+  --color-red-border: #FCA5A5;
+
+  --color-amber: #D97706;
+  --color-amber-light: #FFFBEB;
+  --color-amber-border: #FDE68A;
+
+  --color-transfer: #0369A1;
+  --color-transfer-light: #F0F9FF;
+
+  --color-navy: #0F172A;
+  --color-bg: #F8FAFC;
+  --color-card: #FFFFFF;
+  --color-txt: #0F172A;
+  --color-secondary: #64748B;
+  --color-muted: #9CA3AF;
+
+  --color-border: #E2E8F0;
+  --color-border-light: #F1F5F9;
+
+  --font-family-sans: 'Noto Sans KR', sans-serif;
+
+  --spacing-sidebar: 220px;
+  --spacing-topbar: 52px;
+  --spacing-preview: 300px;
+
+  --radius-card: 10px;
+  --radius-modal: 12px;
+  --radius-btn: 7px;
+  --radius-badge: 4px;
+  --radius-input: 7px;
+  --radius-block: 8px;
+  --radius-toast: 6px;
+
+  --shadow-ring-primary: 0 0 0 3px #EEF2FF;
+  --shadow-ring-primary-lg: 0 0 0 4px #EEF2FF;
+  --shadow-subtle: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+html, body {
+  font-family: 'Noto Sans KR', sans-serif;
+  background: var(--color-bg);
+  color: var(--color-txt);
+  -webkit-font-smoothing: antialiased;
+  font-size: 14px;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
