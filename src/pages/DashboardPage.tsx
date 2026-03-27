@@ -129,7 +129,7 @@ export default function DashboardPage() {
           <DetailCard title="TYPE별 손해율 절감">
             <BarChart items={barChartData} />
             {/* Savings Summary Box */}
-            <div className="bg-border-light rounded-block py-[10px] px-[12px] mt-[10px]">
+            <div className="bg-border-light rounded-block p-3 mt-4">
               <div className="text-[11px] text-secondary mb-[7px]">이번 달 손해율 절감</div>
               <div className="flex gap-3">
                 <div>

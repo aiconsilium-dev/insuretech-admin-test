@@ -25,6 +25,7 @@ export interface KPIData {
   chipLabel?: string;
   variant: 'total' | 'type-a' | 'type-b' | 'type-c';
   route?: string;
+  valueStyle?: string;
 }
 
 export interface BarItem {

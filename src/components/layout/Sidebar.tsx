@@ -42,7 +42,7 @@ function NavItem({ to, label, icon, isSub, end, collapsed, onClick }: NavItemPro
       className={({ isActive }) =>
         clsx(
           'flex items-center gap-[9px] py-2 px-4 text-[13px] font-medium cursor-pointer transition-all text-secondary border-l-2 border-transparent my-[1px]',
-          isSub && 'pl-7 text-[12px]',
+          
           isActive
             ? 'bg-primary-light text-primary border-l-primary font-semibold [&_svg]:opacity-100'
             : 'hover:bg-border-light hover:text-txt [&_svg]:opacity-70',
@@ -88,6 +88,9 @@ const OpinionIcon = () => (
     <path d="M14 2v6h6M16 13H8M16 17H8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
   </svg>
 );
+const TypeAIcon = () => <div className="w-[15px] flex justify-center"><div className="w-[5px] h-[5px] rounded-full bg-amber" /></div>;
+const TypeBIcon = () => <div className="w-[15px] flex justify-center"><div className="w-[5px] h-[5px] rounded-full bg-red" /></div>;
+const TypeCIcon = () => <div className="w-[15px] flex justify-center"><div className="w-[5px] h-[5px] rounded-full bg-green" /></div>;
 const ChevronLeftIcon = () => (
   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
     <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
@@ -163,9 +166,9 @@ function SidebarContent({
         <NavItem to="/claims" label="청구 목록" icon={<ClaimsIcon />} collapsed={collapsed} onClick={onClose} />
         {!collapsed && (
           <>
-            <NavItem to="/type-a" label="TYPE A — 하자소송 이관" isSub onClick={onClose} />
-            <NavItem to="/type-b" label="TYPE B — 면책" isSub onClick={onClose} />
-            <NavItem to="/type-c" label="TYPE C — 지급" isSub onClick={onClose} />
+            <NavItem to="/type-a" label="TYPE A — 하자소송 이관" icon={<TypeAIcon />} onClick={onClose} />
+            <NavItem to="/type-b" label="TYPE B — 면책" icon={<TypeBIcon />} onClick={onClose} />
+            <NavItem to="/type-c" label="TYPE C — 지급" icon={<TypeCIcon />} onClick={onClose} />
           </>
         )}
         <NavItem to="/estimation" label="적산 결과 검토" icon={<EstimationIcon />} collapsed={collapsed} onClick={onClose} />

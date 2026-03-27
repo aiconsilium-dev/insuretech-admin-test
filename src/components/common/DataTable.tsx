@@ -57,7 +57,7 @@ export default function DataTable<T>({
               {columns.map((col) => (
                 <td
                   key={col.key}
-                  className="py-[11px] px-4 text-[13px] align-middle"
+                  className="py-3 px-4 text-[13px] align-middle"
                   style={col.align === 'right' ? { textAlign: 'right' } : undefined}
                 >
                   {col.render

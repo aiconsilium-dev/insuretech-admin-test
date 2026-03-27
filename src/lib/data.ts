@@ -26,6 +26,7 @@ export const kpiData: KPIData[] = [
     chipLabel: '소송 진행 중',
     variant: 'type-a',
     route: '/type-a',
+    valueStyle: 'var(--amber)',
   },
   {
     label: 'TYPE B — 면책 처리',
@@ -42,6 +43,7 @@ export const kpiData: KPIData[] = [
     chipLabel: 'AI 처리',
     variant: 'type-c',
     route: '/type-c',
+    valueStyle: 'var(--green)',
   },
 ];
 

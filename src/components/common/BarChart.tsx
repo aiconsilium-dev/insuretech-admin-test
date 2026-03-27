@@ -20,7 +20,7 @@ export default function BarChart({ items }: BarChartProps) {
           </div>
           <div className="flex-1 h-4 bg-border-light rounded-[3px] overflow-hidden">
             <div
-              className={`h-full rounded-[3px] flex items-center justify-end pr-[5px] text-[9px] font-bold text-white ${colorMap[item.color]}`}
+              className={`h-full rounded-[3px] flex items-center justify-end pr-[5px] text-white text-[9px] font-bold ${colorMap[item.color]}`}
               style={{ width: `${item.value}%` }}
             >
               {item.value}%
