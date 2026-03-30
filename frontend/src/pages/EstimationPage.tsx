@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import {
@@ -7,27 +7,118 @@ import {
   Toast,
 } from '@/components/common';
 import { estimationRows, estimationDeductions, typeCDetail } from '@/lib/data';
+import { fetchEstimation, patchEstimationItem } from '@/lib/api';
+import type { EstimationItem } from '@/lib/api';
+import type { EstimationRow } from '@/lib/types';
+
+const CLAIM_ID = 'CLM-0247';
+
+// Map API EstimationItem → local EstimationRow shape
+function mapApiItem(item: EstimationItem): EstimationRow {
+  return {
+    id: typeof item.id === 'number' ? item.id : Number(item.id) || 0,
+    name: item.name,
+    description: item.description,
+    quantity: item.quantity,
+    unit: item.unit,
+    standardLabel: item.standardLabel ?? '',
+    standardVariant: item.standardVariant ?? 'primary',
+    subtotal: item.subtotal,
+    checked: item.isSelected,
+  };
+}
 
 export default function EstimationPage() {
   const navigate = useNavigate();
-  const [rows, setRows] = useState(estimationRows);
+  const [rows, setRows] = useState<EstimationRow[]>(estimationRows);
   const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('승인 요청이 전송되었습니다');
+  const [loading, setLoading] = useState(true);
+  const [vendorEstimate, setVendorEstimate] = useState(typeCDetail.estimationResult.vendorEstimate);
+  // Store original API item ids for PATCH calls
+  const [apiItemIds, setApiItemIds] = useState<Array<string | number>>([]);
+  const [useApi, setUseApi] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchEstimation(CLAIM_ID)
+      .then((data) => {
+        if (cancelled) return;
+        if (data.items && data.items.length > 0) {
+          setRows(data.items.map(mapApiItem));
+          setApiItemIds(data.items.map((i) => i.id));
+          setUseApi(true);
+        }
+        if (data.vendorEstimate) setVendorEstimate(data.vendorEstimate);
+      })
+      .catch(() => {
+        // Fallback: use mock data (already initialized)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const toggleRow = (id: number) => {
+    const row = rows.find((r) => r.id === id);
+    if (!row) return;
+
+    const newChecked = !row.checked;
+
+    // Update local state immediately
     setRows((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, checked: !r.checked } : r)),
+      prev.map((r) => (r.id === id ? { ...r, checked: newChecked } : r)),
     );
+
+    // Call API if using API data
+    if (useApi) {
+      const idx = rows.findIndex((r) => r.id === id);
+      const apiId = apiItemIds[idx];
+      if (apiId !== undefined) {
+        patchEstimationItem(CLAIM_ID, apiId, newChecked).catch(() => {
+          // Revert on failure
+          setRows((prev) =>
+            prev.map((r) => (r.id === id ? { ...r, checked: !newChecked } : r)),
+          );
+        });
+      }
+    }
+  };
+
+  const deductions = {
+    depreciation: estimationDeductions.depreciation,
+    deductible: estimationDeductions.deductible,
+    indirectRate: estimationDeductions.indirectRate,
   };
 
   const checkedSubtotal = rows.filter((r) => r.checked).reduce((sum, r) => sum + r.subtotal, 0);
-  const indirect = Math.round(checkedSubtotal * estimationDeductions.indirectRate);
+  const indirect = Math.round(checkedSubtotal * deductions.indirectRate);
   const subtotalWithIndirect = checkedSubtotal + indirect;
-  const depreciation = estimationDeductions.depreciation;
-  const deductible = estimationDeductions.deductible;
+  const depreciation = deductions.depreciation;
+  const deductible = deductions.deductible;
   const finalAmount = subtotalWithIndirect - depreciation - deductible;
-
-  const vendorEstimate = typeCDetail.estimationResult.vendorEstimate;
   const savingsPercent = (((vendorEstimate - finalAmount) / vendorEstimate) * 100).toFixed(1);
+
+  if (loading) {
+    return (
+      <div className="animate-pulse">
+        <div className="h-6 bg-border-light rounded w-1/3 mb-4" />
+        <div className="h-4 bg-border-light rounded w-1/2 mb-4" />
+        <div className="bg-card rounded-card border border-border overflow-hidden">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex gap-4 px-4 py-3 border-b border-border">
+              <div className="h-4 w-4 bg-border-light rounded" />
+              <div className="flex-1 h-4 bg-border-light rounded" />
+              <div className="h-4 w-20 bg-border-light rounded" />
+              <div className="h-4 w-16 bg-border-light rounded" />
+              <div className="h-4 w-20 bg-border-light rounded" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -84,7 +175,7 @@ export default function EstimationPage() {
             {/* Subtotal */}
             <tr className="bg-border-light">
               <td colSpan={4} className="py-[10px] px-4 text-[13px] font-semibold">
-                소계 ({rows.filter(r => r.checked).length}개 공종) + 간접비 {(estimationDeductions.indirectRate * 100).toFixed(1)}%
+                소계 ({rows.filter(r => r.checked).length}개 공종) + 간접비 {(deductions.indirectRate * 100).toFixed(1)}%
               </td>
               <td className="py-[10px] px-4 text-[13px] font-bold text-right">
                 {subtotalWithIndirect.toLocaleString()}원
@@ -135,13 +226,17 @@ export default function EstimationPage() {
         <Button
           variant="green"
           onClick={() => {
+            setToastMessage('승인 요청이 전송되었습니다');
             setToastVisible(true);
             setTimeout(() => navigate('/approve'), 1500);
           }}
         >
           손해사정사 승인 요청
         </Button>
-        <Button variant="secondary" onClick={() => setToastVisible(true)}>
+        <Button variant="secondary" onClick={() => {
+          setToastMessage('항목 수정 후 재산출');
+          setToastVisible(true);
+        }}>
           항목 수정 후 재산출
         </Button>
         <Button variant="secondary" onClick={() => navigate('/type-c')}>
@@ -150,7 +245,7 @@ export default function EstimationPage() {
       </div>
 
       <Toast
-        message="승인 요청이 전송되었습니다"
+        message={toastMessage}
         visible={toastVisible}
         onHide={() => setToastVisible(false)}
       />

@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   KPICard,
@@ -11,6 +12,8 @@ import {
 import type { Column } from '@/components/common';
 import type { Claim } from '@/lib/types';
 import { kpiData, dashboardRecentClaims, barChartData } from '@/lib/data';
+import { fetchKpi, fetchClaims } from '@/lib/api';
+import type { KpiData, ClaimListItem } from '@/lib/api';
 
 const typeToRoute: Record<string, string> = {
   A: '/type-a',
@@ -32,8 +35,106 @@ const statusVariantMap: Record<string, 'done' | 'sent' | 'wait' | 'transfer'> = 
   paid: 'done',
 };
 
+// Map API ClaimListItem → local Claim shape for DataTable
+function mapApiClaim(item: ClaimListItem): Claim {
+  return {
+    id: item.id,
+    complex: item.complexName,
+    description: item.description,
+    date: item.claimedAt?.slice(0, 10) ?? '',
+    type: item.type,
+    confidence: item.aiConfidence,
+    status: item.status as Claim['status'],
+    statusLabel: item.status,
+    amount: item.amount,
+    actionLabel: '상세',
+    actionVariant: 'primary',
+    actionRoute: typeToRoute[item.type] ?? '/claims',
+  };
+}
+
+// Loading skeleton for KPI cards
+function KPICardSkeleton() {
+  return (
+    <div className="bg-card rounded-card border border-border p-4 animate-pulse">
+      <div className="h-3 bg-border-light rounded w-2/3 mb-3" />
+      <div className="h-8 bg-border-light rounded w-1/2 mb-2" />
+      <div className="h-3 bg-border-light rounded w-3/4" />
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate();
+
+  // API state
+  const [kpi, setKpi] = useState<KpiData | null>(null);
+  const [recentClaims, setRecentClaims] = useState<Claim[]>([]);
+  const [lossRateAb, setLossRateAb] = useState<number>(-16.8);
+  const [lossRateC, setLossRateC] = useState<number>(-11.2);
+  const [loading, setLoading] = useState(true);
+  const [claimsLoading, setClaimsLoading] = useState(true);
+
+  // Fetch KPI
+  useEffect(() => {
+    let cancelled = false;
+    fetchKpi()
+      .then((data) => {
+        if (cancelled) return;
+        setKpi(data);
+        setLossRateAb(data.lossRateAb);
+        setLossRateC(data.lossRateC);
+      })
+      .catch(() => {
+        // Fallback: keep null → will use mock data below
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Fetch recent claims
+  useEffect(() => {
+    let cancelled = false;
+    fetchClaims({ limit: 5 })
+      .then((data) => {
+        if (cancelled) return;
+        setRecentClaims(data.items.map(mapApiClaim));
+      })
+      .catch(() => {
+        // Fallback: use mock data
+        if (!cancelled) setRecentClaims(dashboardRecentClaims);
+      })
+      .finally(() => {
+        if (!cancelled) setClaimsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Build KPI cards from API data or fall back to mock
+  const kpiCards = kpi
+    ? [
+        {
+          ...kpiData[0],
+          value: kpi.totalClaims,
+        },
+        {
+          ...kpiData[1],
+          value: kpi.typeA,
+        },
+        {
+          ...kpiData[2],
+          value: kpi.typeB,
+        },
+        {
+          ...kpiData[3],
+          value: kpi.typeC,
+        },
+      ]
+    : kpiData;
+
+  const displayClaims = recentClaims.length > 0 ? recentClaims : dashboardRecentClaims;
 
   const columns: Column<Claim>[] = [
     {
@@ -100,29 +201,40 @@ export default function DashboardPage() {
 
       {/* KPI Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-[18px]">
-        {kpiData.map((kpi) => (
-          <KPICard
-            key={kpi.variant}
-            {...kpi}
-            onClick={() => navigate(kpi.route ?? '/claims')}
-          />
-        ))}
+        {loading
+          ? Array.from({ length: 4 }).map((_, i) => <KPICardSkeleton key={i} />)
+          : kpiCards.map((kpi) => (
+              <KPICard
+                key={kpi.variant}
+                {...kpi}
+                onClick={() => navigate(kpi.route ?? '/claims')}
+              />
+            ))}
       </div>
 
       {/* 2-column layout */}
       <div className="grid gap-[14px] grid-cols-1 xl:grid-cols-[1fr_300px]">
         {/* Left: Recent Claims Table */}
-        <DataTable<Claim>
-          title="최근 청구 내역"
-          columns={columns}
-          data={dashboardRecentClaims}
-          onRowClick={(row) => navigate(typeToRoute[row.type] ?? '/claims')}
-          headerRight={
-            <Button variant="secondary" size="sm" onClick={() => navigate('/claims')}>
-              전체 보기
-            </Button>
-          }
-        />
+        {claimsLoading ? (
+          <div className="bg-card rounded-card border border-border p-6 animate-pulse">
+            <div className="h-4 bg-border-light rounded w-1/4 mb-4" />
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-10 bg-border-light rounded mb-2" />
+            ))}
+          </div>
+        ) : (
+          <DataTable<Claim>
+            title="최근 청구 내역"
+            columns={columns}
+            data={displayClaims}
+            onRowClick={(row) => navigate(typeToRoute[row.type] ?? '/claims')}
+            headerRight={
+              <Button variant="secondary" size="sm" onClick={() => navigate('/claims')}>
+                전체 보기
+              </Button>
+            }
+          />
+        )}
 
         {/* Right: Loss Rate + Savings */}
         <div className="flex flex-col gap-[14px]">
@@ -133,12 +245,12 @@ export default function DashboardPage() {
               <div className="text-[11px] text-secondary mb-[7px]">이번 달 손해율 절감</div>
               <div className="flex gap-3">
                 <div>
-                  <div className="text-[18px] font-bold text-amber">-16.8%</div>
+                  <div className="text-[18px] font-bold text-amber">{lossRateAb}%</div>
                   <div className="text-[10px] text-secondary">A+B 직접 차단</div>
                 </div>
                 <div className="w-px bg-border" />
                 <div>
-                  <div className="text-[18px] font-bold text-green">-11.2%</div>
+                  <div className="text-[18px] font-bold text-green">{lossRateC}%</div>
                   <div className="text-[10px] text-secondary">C 과다견적 방어</div>
                 </div>
               </div>

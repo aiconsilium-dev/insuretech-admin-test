@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   DataTable,
@@ -7,6 +8,8 @@ import {
 import type { Column } from '@/components/common';
 import type { OpinionItem } from '@/lib/types';
 import { opinions } from '@/lib/data';
+import { fetchDocuments } from '@/lib/api';
+import type { DocumentItem } from '@/lib/api';
 
 const statusVariantMap: Record<string, 'done' | 'sent' | 'wait' | 'transfer'> = {
   done: 'done',
@@ -16,8 +19,42 @@ const statusVariantMap: Record<string, 'done' | 'sent' | 'wait' | 'transfer'> = 
   paid: 'done',
 };
 
+function mapApiDocument(doc: DocumentItem): OpinionItem {
+  return {
+    claimId: doc.claimId,
+    summary: doc.summary,
+    type: doc.type ?? doc.docType ?? '의견서',
+    date: doc.date?.slice(0, 10) ?? '',
+    status: (doc.status as OpinionItem['status']) ?? 'done',
+    statusLabel: doc.statusLabel ?? doc.status,
+    actionLabel: doc.actionLabel ?? 'PDF',
+    actionVariant: (doc.actionVariant ?? 'secondary') as 'primary' | 'secondary',
+    actionRoute: doc.actionRoute,
+  };
+}
+
 export default function OpinionPage() {
   const navigate = useNavigate();
+  const [opinionItems, setOpinionItems] = useState<OpinionItem[]>(opinions);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchDocuments({ limit: 50 })
+      .then((data) => {
+        if (cancelled) return;
+        if (data.items && data.items.length > 0) {
+          setOpinionItems(data.items.map(mapApiDocument));
+        }
+      })
+      .catch(() => {
+        // Fallback: keep mock data
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const columns: Column<OpinionItem>[] = [
     {
@@ -75,13 +112,29 @@ export default function OpinionPage() {
         <div className="text-[13px] text-secondary">자동 생성된 법률 의견서 목록</div>
       </div>
 
-      <DataTable<OpinionItem>
-        columns={columns}
-        data={opinions}
-        onRowClick={(row) => {
-          if (row.actionRoute) navigate(row.actionRoute);
-        }}
-      />
+      {loading ? (
+        <div className="bg-card rounded-card border border-border overflow-hidden animate-pulse">
+          <div className="h-10 bg-border-light border-b border-border" />
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex gap-4 px-4 py-3 border-b border-border items-center">
+              <div className="h-3 w-20 bg-border-light rounded" />
+              <div className="flex-1 h-3 bg-border-light rounded" />
+              <div className="h-3 w-24 bg-border-light rounded" />
+              <div className="h-3 w-20 bg-border-light rounded" />
+              <div className="h-5 w-16 bg-border-light rounded" />
+              <div className="h-6 w-12 bg-border-light rounded" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <DataTable<OpinionItem>
+          columns={columns}
+          data={opinionItems}
+          onRowClick={(row) => {
+            if (row.actionRoute) navigate(row.actionRoute);
+          }}
+        />
+      )}
     </div>
   );
 }

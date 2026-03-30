@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import {
@@ -9,17 +9,16 @@ import {
 } from '@/components/common';
 import type { Claim, PreviewData } from '@/lib/types';
 import { claims, claimTabCounts } from '@/lib/data';
+import { fetchClaims } from '@/lib/api';
+import type { ClaimListItem } from '@/lib/api';
 
 type TabKey = 'all' | 'a' | 'b' | 'c' | 'wait' | 'done';
 
-const tabs: { key: TabKey; label: string; count?: number; countStyle?: string }[] = [
-  { key: 'all', label: '전체', count: claimTabCounts.all, countStyle: 'bg-border-light text-secondary' },
-  { key: 'a', label: 'TYPE A', count: claimTabCounts.a, countStyle: 'bg-amber-light text-amber' },
-  { key: 'b', label: 'TYPE B', count: claimTabCounts.b, countStyle: 'bg-red-light text-red' },
-  { key: 'c', label: 'TYPE C', count: claimTabCounts.c, countStyle: 'bg-green-light text-green' },
-  { key: 'wait', label: '승인 대기', count: claimTabCounts.wait, countStyle: 'bg-red-light text-red' },
-  { key: 'done', label: '완료' },
-];
+const typeToRoute: Record<string, string> = {
+  A: '/type-a',
+  B: '/type-b',
+  C: '/type-c',
+};
 
 const badgeVariantMap: Record<string, 'ba' | 'bb' | 'bc'> = {
   A: 'ba',
@@ -40,6 +39,24 @@ const borderColorMap: Record<string, string> = {
   B: 'border-l-red',
   C: 'border-l-green',
 };
+
+// Map API ClaimListItem → local Claim shape
+function mapApiClaim(item: ClaimListItem): Claim {
+  return {
+    id: item.id,
+    complex: item.complexName,
+    description: item.description,
+    date: item.claimedAt?.slice(0, 10) ?? '',
+    type: item.type,
+    confidence: item.aiConfidence,
+    status: item.status as Claim['status'],
+    statusLabel: item.status,
+    amount: item.amount,
+    actionLabel: '상세',
+    actionVariant: 'primary',
+    actionRoute: typeToRoute[item.type] ?? '/claims',
+  };
+}
 
 type SortKey = 'date' | 'confidence' | 'status';
 
@@ -74,9 +91,55 @@ export default function ClaimsPage() {
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [selectedClaim, setSelectedClaim] = useState<Claim | null>(null);
 
-  const filtered = useMemo(() => {
-    let result = [...claims];
+  // API state
+  const [apiClaims, setApiClaims] = useState<Claim[] | null>(null);
+  const [totalCount, setTotalCount] = useState<{ all: number; a: number; b: number; c: number; wait: number } | null>(null);
+  const [loading, setLoading] = useState(true);
 
+  const loadClaims = useCallback(() => {
+    setLoading(true);
+    const typeParam = activeTab === 'a' ? 'A' : activeTab === 'b' ? 'B' : activeTab === 'c' ? 'C' : undefined;
+    const statusParam = activeTab === 'wait' ? 'wait' : activeTab === 'done' ? 'done' : undefined;
+
+    fetchClaims({
+      type: typeParam,
+      status: statusParam,
+      search: searchQuery.trim() || undefined,
+      limit: 100,
+    })
+      .then((data) => {
+        const mapped = data.items.map(mapApiClaim);
+        // Apply client-side sort since API may not support sorting
+        if (sortKey === 'date') mapped.sort((a, b) => b.date.localeCompare(a.date));
+        else if (sortKey === 'confidence') mapped.sort((a, b) => b.confidence - a.confidence);
+        else if (sortKey === 'status') mapped.sort((a, b) => a.statusLabel.localeCompare(b.statusLabel));
+        setApiClaims(mapped);
+        setTotalCount({
+          all: data.total ?? mapped.length,
+          a: mapped.filter((c) => c.type === 'A').length,
+          b: mapped.filter((c) => c.type === 'B').length,
+          c: mapped.filter((c) => c.type === 'C').length,
+          wait: mapped.filter((c) => c.status === 'wait').length,
+        });
+      })
+      .catch(() => {
+        // Fallback to mock data
+        setApiClaims(null);
+        setTotalCount(null);
+      })
+      .finally(() => setLoading(false));
+  }, [activeTab, searchQuery, sortKey]);
+
+  useEffect(() => {
+    loadClaims();
+  }, [loadClaims]);
+
+  // Use API data if available, otherwise fall back to filtered mock data
+  const displayClaims = useMemo(() => {
+    if (apiClaims !== null) return apiClaims;
+
+    // Fallback: use mock data with client-side filtering
+    let result = [...claims];
     if (activeTab === 'a') result = result.filter((c) => c.type === 'A');
     else if (activeTab === 'b') result = result.filter((c) => c.type === 'B');
     else if (activeTab === 'c') result = result.filter((c) => c.type === 'C');
@@ -98,10 +161,20 @@ export default function ClaimsPage() {
     else if (sortKey === 'status') result.sort((a, b) => a.statusLabel.localeCompare(b.statusLabel));
 
     return result;
-  }, [activeTab, searchQuery, sortKey]);
+  }, [apiClaims, activeTab, searchQuery, sortKey]);
+
+  const tabCounts = totalCount ?? claimTabCounts;
+
+  const tabs: { key: TabKey; label: string; count?: number; countStyle?: string }[] = [
+    { key: 'all', label: '전체', count: tabCounts.all, countStyle: 'bg-border-light text-secondary' },
+    { key: 'a', label: 'TYPE A', count: tabCounts.a, countStyle: 'bg-amber-light text-amber' },
+    { key: 'b', label: 'TYPE B', count: tabCounts.b, countStyle: 'bg-red-light text-red' },
+    { key: 'c', label: 'TYPE C', count: tabCounts.c, countStyle: 'bg-green-light text-green' },
+    { key: 'wait', label: '승인 대기', count: tabCounts.wait, countStyle: 'bg-red-light text-red' },
+    { key: 'done', label: '완료' },
+  ];
 
   const preview = selectedClaim ? getPreviewData(selectedClaim) : null;
-
   const closePreview = () => setSelectedClaim(null);
 
   return (
@@ -111,7 +184,7 @@ export default function ClaimsPage() {
         <div>
           <div className="text-[18px] font-bold tracking-[-0.4px] mb-[2px]">청구 목록</div>
           <div className="text-[13px] text-secondary">
-            이번 달 247건 · 승인 대기 <span className="text-red font-bold">3건</span>
+            이번 달 {tabCounts.all}건 · 승인 대기 <span className="text-red font-bold">{tabCounts.wait}건</span>
           </div>
         </div>
         <div className="flex gap-2 items-center">
@@ -190,7 +263,23 @@ export default function ClaimsPage() {
 
           {/* Rows */}
           <div className="flex-1 overflow-y-auto">
-            {filtered.length === 0 ? (
+            {loading ? (
+              <div className="flex flex-col gap-0">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="animate-pulse border-b border-border px-4 py-[11px] flex gap-4 items-center">
+                    <div className="h-3 w-20 bg-border-light rounded shrink-0" />
+                    <div className="flex-1">
+                      <div className="h-3 bg-border-light rounded w-1/2 mb-2" />
+                      <div className="h-2 bg-border-light rounded w-2/3" />
+                    </div>
+                    <div className="h-3 w-12 bg-border-light rounded hidden md:block" />
+                    <div className="h-3 w-12 bg-border-light rounded hidden md:block" />
+                    <div className="h-5 w-16 bg-border-light rounded hidden md:block" />
+                    <div className="h-6 w-14 bg-border-light rounded" />
+                  </div>
+                ))}
+              </div>
+            ) : displayClaims.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-secondary py-12">
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" className="mb-[10px] opacity-30">
                   <circle cx="11" cy="11" r="7" stroke="#64748B" strokeWidth="1.5" />
@@ -199,7 +288,7 @@ export default function ClaimsPage() {
                 검색 결과가 없습니다
               </div>
             ) : (
-              filtered.map((claim) => (
+              displayClaims.map((claim) => (
                 <div
                   key={claim.id}
                   onClick={() => setSelectedClaim(claim)}
@@ -251,11 +340,11 @@ export default function ClaimsPage() {
 
           {/* Footer Summary */}
           <div className="px-4 py-[9px] bg-border-light border-t border-border flex justify-between items-center shrink-0 text-[11px] text-secondary">
-            <span>전체 247건 표시 중</span>
+            <span>전체 {tabCounts.all}건 표시 중</span>
             <div className="flex gap-4">
-              <span>TYPE A <strong className="text-amber">38건</strong></span>
-              <span>TYPE B <strong className="text-red">61건</strong></span>
-              <span>TYPE C <strong className="text-green">148건</strong></span>
+              <span>TYPE A <strong className="text-amber">{tabCounts.a}건</strong></span>
+              <span>TYPE B <strong className="text-red">{tabCounts.b}건</strong></span>
+              <span>TYPE C <strong className="text-green">{tabCounts.c}건</strong></span>
             </div>
           </div>
         </div>
