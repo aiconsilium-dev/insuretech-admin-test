@@ -2,6 +2,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Claim, ClaimStatus, ClaimType } from './entity/claim.entity';
+import { TypeADetail } from './entity/type-a-detail.entity';
+import { TypeBDetail } from './entity/type-b-detail.entity';
 import { Estimation } from '@/estimations/entity/estimation.entity';
 import { EstimationItem } from '@/estimations/entity/estimation-item.entity';
 import { Approval, Decision } from '@/approvals/entity/approval.entity';
@@ -15,6 +17,10 @@ export class ClaimsService {
   constructor(
     @InjectRepository(Claim)
     private readonly claimRepository: Repository<Claim>,
+    @InjectRepository(TypeADetail)
+    private readonly typeADetailRepository: Repository<TypeADetail>,
+    @InjectRepository(TypeBDetail)
+    private readonly typeBDetailRepository: Repository<TypeBDetail>,
     @InjectRepository(Estimation)
     private readonly estimationRepository: Repository<Estimation>,
     @InjectRepository(EstimationItem)
@@ -160,10 +166,10 @@ export class ClaimsService {
       events: claim.events,
     };
 
-    // Conditionally load type-specific details
+    // Conditionally load type-specific details using TypeORM entity relations
     if (claim.type === ClaimType.A) {
-      const typeADetail = await this.dataSource
-        .createQueryBuilder()
+      const typeADetail = await this.typeADetailRepository
+        .createQueryBuilder('detail')
         .select([
           'detail.claimId',
           'detail.defectType',
@@ -172,13 +178,12 @@ export class ClaimsService {
           'detail.unitClaimEst',
           'detail.isExemption',
         ])
-        .from('type_a_details', 'detail')
-        .where('detail.claim_id = :id', { id })
-        .getRawOne();
+        .where('detail.claimId = :id', { id })
+        .getOne();
       result.typeADetail = typeADetail ?? null;
     } else if (claim.type === ClaimType.B) {
-      const typeBDetail = await this.dataSource
-        .createQueryBuilder()
+      const typeBDetail = await this.typeBDetailRepository
+        .createQueryBuilder('detail')
         .select([
           'detail.claimId',
           'detail.applicableClause',
@@ -186,42 +191,32 @@ export class ClaimsService {
           'detail.currentStep',
           'detail.flowSteps',
         ])
-        .from('type_b_details', 'detail')
-        .where('detail.claim_id = :id', { id })
-        .getRawOne();
+        .where('detail.claimId = :id', { id })
+        .getOne();
       result.typeBDetail = typeBDetail ?? null;
     } else if (claim.type === ClaimType.C) {
-      const estimation = await this.estimationRepository
-        .createQueryBuilder('estimation')
-        .leftJoin('estimation.items', 'item')
-        .select([
-          'estimation.claimId',
-          'estimation.totalAmount',
-          'estimation.calcSeconds',
-          'estimation.vendorEstimate',
-          'estimation.depreciation',
-          'estimation.indirectRate',
-          'estimation.finalAmount',
-          'item.id',
-          'item.name',
-          'item.description',
-          'item.quantity',
-          'item.unit',
-          'item.standardSrc',
-          'item.subtotal',
-          'item.isSelected',
-          'item.sortOrder',
-        ])
-        .where('estimation.claimId = :id', { id })
-        .getOne();
-      result.estimation = estimation ?? null;
+      result.estimation = (await this.loadEstimation(id)) ?? null;
     }
 
     return result;
   }
 
   async findEstimation(claimId: string) {
-    const estimation = await this.estimationRepository
+    const estimation = await this.loadEstimation(claimId);
+
+    if (!estimation) {
+      throw new NotFoundException(`Estimation for claim ${claimId} not found`);
+    }
+
+    return estimation;
+  }
+
+  /**
+   * Shared helper — loads estimation + items for a given claimId.
+   * Returns null if not found (callers decide whether to throw).
+   */
+  private async loadEstimation(claimId: string) {
+    return this.estimationRepository
       .createQueryBuilder('estimation')
       .leftJoin('estimation.items', 'item')
       .select([
@@ -244,12 +239,6 @@ export class ClaimsService {
       ])
       .where('estimation.claimId = :claimId', { claimId })
       .getOne();
-
-    if (!estimation) {
-      throw new NotFoundException(`Estimation for claim ${claimId} not found`);
-    }
-
-    return estimation;
   }
 
   async updateEstimationItem(claimId: string, itemId: number, dto: UpdateEstimationItemDto) {
@@ -309,5 +298,29 @@ export class ClaimsService {
     });
 
     return this.approvalRepository.save(newApproval);
+  }
+
+  // ─────────────────────────────────────────────
+  // Metadata APIs (작업 2)
+  // ─────────────────────────────────────────────
+
+  /** Returns all possible claim types with human-readable labels. */
+  getClaimTypes(): { value: string; label: string }[] {
+    return [
+      { value: ClaimType.A, label: '하자보수 (Type A)' },
+      { value: ClaimType.B, label: '소송/이의신청 (Type B)' },
+      { value: ClaimType.C, label: '손해사정 (Type C)' },
+    ];
+  }
+
+  /** Returns all possible claim statuses with human-readable labels. */
+  getClaimStatuses(): { value: string; label: string }[] {
+    return [
+      { value: ClaimStatus.WAIT,     label: '접수 대기' },
+      { value: ClaimStatus.DONE,     label: '처리 완료' },
+      { value: ClaimStatus.SENT,     label: '발송됨' },
+      { value: ClaimStatus.TRANSFER, label: '이관' },
+      { value: ClaimStatus.PAID,     label: '지급 완료' },
+    ];
   }
 }

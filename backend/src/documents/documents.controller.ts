@@ -12,6 +12,26 @@ import { DocumentListResponseDto } from './dto/documents-response.dto';
 export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
 
+  // ─── Metadata ───────────────────────────────────────────────────────────────
+
+  @Public()
+  @Get('types')
+  @ApiOperation({ summary: 'Get all document types with labels' })
+  @ApiResponse({ status: 200, description: 'Document types retrieved successfully' })
+  getDocTypes(): ApiResponseDto<{ value: string; label: string }[]> {
+    return new ApiResponseDto(true, 'Document types retrieved successfully', this.documentsService.getDocTypes());
+  }
+
+  @Public()
+  @Get('statuses')
+  @ApiOperation({ summary: 'Get all document statuses with labels' })
+  @ApiResponse({ status: 200, description: 'Document statuses retrieved successfully' })
+  getDocStatuses(): ApiResponseDto<{ value: string; label: string }[]> {
+    return new ApiResponseDto(true, 'Document statuses retrieved successfully', this.documentsService.getDocStatuses());
+  }
+
+  // ─── CRUD ────────────────────────────────────────────────────────────────────
+
   @Public()
   @Get()
   @ApiOperation({ summary: 'Get paginated list of documents with optional filters' })

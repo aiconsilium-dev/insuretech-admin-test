@@ -37,6 +37,26 @@ import {
 export class ClaimsController {
   constructor(private readonly claimsService: ClaimsService) {}
 
+  // ─── Metadata ───────────────────────────────────────────────────────────────
+
+  @Public()
+  @Get('types')
+  @ApiOperation({ summary: 'Get all claim types with labels' })
+  @ApiResponse({ status: 200, description: 'Claim types retrieved successfully' })
+  getClaimTypes(): ApiResponseDto<{ value: string; label: string }[]> {
+    return new ApiResponseDto(true, 'Claim types retrieved successfully', this.claimsService.getClaimTypes());
+  }
+
+  @Public()
+  @Get('statuses')
+  @ApiOperation({ summary: 'Get all claim statuses with labels' })
+  @ApiResponse({ status: 200, description: 'Claim statuses retrieved successfully' })
+  getClaimStatuses(): ApiResponseDto<{ value: string; label: string }[]> {
+    return new ApiResponseDto(true, 'Claim statuses retrieved successfully', this.claimsService.getClaimStatuses());
+  }
+
+  // ─── CRUD ────────────────────────────────────────────────────────────────────
+
   @Public()
   @Get()
   @ApiOperation({ summary: 'Get paginated list of claims with optional filters' })

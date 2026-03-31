@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Document } from './entity/document.entity';
+import { Document, DocType, DocStatus } from './entity/document.entity';
 import { ListDocumentsDto } from './dto/list-documents.dto';
 
 @Injectable()
@@ -60,5 +60,27 @@ export class DocumentsService {
     const totalPages = Math.ceil(totalCount / limit);
 
     return { items, totalCount, page, totalPages };
+  }
+
+  // ─── Metadata ───────────────────────────────────────────────────────────────
+
+  /** Returns all possible document types with human-readable labels. */
+  getDocTypes(): { value: string; label: string }[] {
+    return [
+      { value: DocType.EXEMPTION_NOTICE,   label: '면책 통보서' },
+      { value: DocType.LITIGATION_BRIEF,   label: '소송 의견서' },
+      { value: DocType.ADJUSTMENT_OPINION, label: '손해사정 의견서' },
+      { value: DocType.CIVIL_RESPONSE,     label: '민원 답변서' },
+    ];
+  }
+
+  /** Returns all possible document statuses with human-readable labels. */
+  getDocStatuses(): { value: string; label: string }[] {
+    return [
+      { value: DocStatus.DRAFT,    label: '초안' },
+      { value: DocStatus.WAIT,     label: '검토 대기' },
+      { value: DocStatus.DONE,     label: '완료' },
+      { value: DocStatus.TRANSFER, label: '이관' },
+    ];
   }
 }
